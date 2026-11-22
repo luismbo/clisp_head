@@ -1,0 +1,36 @@
+name: Test linkset (issue 5)
+
+on:
+  push:
+    branches: [fix-linkset-paths]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: glibc2.19
+      DOCKER_REPO: local/clisp_bin
+      DOCKER_PLATFORM: linux/amd64
+      CPU: x86-64
+      OS: linux
+      CC: 'cc -std=gnu99'
+    steps:
+      - uses: actions/checkout@v4
+      - name: control - current release tarball (expected to fail)
+        id: control
+        continue-on-error: true
+        run: |
+          curl -sfSL -o control.tar.bz2 https://github.com/roswell/clisp_head/releases/download/24.9.7/clisp-24.9.7-x86-64-linux-binary.tar.bz2
+          sh ./tools-for-build/test-linkset control.tar.bz2
+      - name: build docker image
+        run: make build-docker
+      - name: build clisp with the fix
+        run: |
+          make lasthash
+          make docker
+          ls -l *.bz2
+      - name: test patched tarball
+        run: sh ./tools-for-build/test-linkset `ls clisp-*-binary.tar.bz2`
+      - name: report control outcome
+        run: echo "control outcome = ${{ steps.control.outcome }}"

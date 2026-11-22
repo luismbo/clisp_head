@@ -1,0 +1,42 @@
+#!/bin/sh
+# Unpack a CLISP binary tarball somewhere other than its build prefix and
+# check that new executables can be linked from its base linking set.
+# Usage: test-linkset TARBALL
+set -e
+tarball=`cd "$(dirname "$1")"; pwd`/`basename "$1"`
+work=`mktemp -d`/relocated
+mkdir -p "$work"
+tar -xjf "$tarball" -C "$work"
+root=`echo "$work"/clisp-*`
+lib=`echo "$root"/lib/clisp-*`
+base=$lib/base
+CLISP="$root/bin/clisp -B $lib"
+export CLISP
+
+echo "== $base/makevars"
+cat "$base/makevars"
+
+echo "== check: no absolute paths in LIBS"
+abs=`. "$base/makevars"; for f in $LIBS; do case $f in /*) echo "$f";; esac; done`
+if test -n "$abs"; then echo "FAIL: absolute LIBS entries: $abs"; exit 1; fi
+
+echo "== check: every non-flag LIBS entry exists in the linkset"
+(cd "$base"; . ./makevars
+ for f in $LIBS; do case $f in -*) ;; *) test -f "$f" || { echo "FAIL: missing $f"; exit 1; };; esac; done)
+
+echo "== test 1: link lisp.run from makevars (what cffi-toolchain does)"
+(cd "$base"; . ./makevars; set -x; $CC $CFLAGS $CLFLAGS modules.o $LIBS -o "$work/lisp.run")
+"$work/lisp.run" -B "$lib" -M "$base/lispinit.mem" -norc -q -x '(princ (+ 1 2))'; echo
+
+echo "== test 2: clisp-link add with a dummy module (relinks in a new linkset)"
+mkdir -p "$work/dummy"
+cat > "$work/dummy/link.sh" <<'EOF'
+NEW_FILES=''
+NEW_LIBS=''
+NEW_MODULES=''
+TO_LOAD=''
+EOF
+"$root/bin/clisp-link" add "$base" "$work/newset" "$work/dummy"
+"$work/newset/lisp.run" -B "$lib" -M "$work/newset/lispinit.mem" -norc -q -x '(princ (* 6 7))'; echo
+
+echo "== ALL OK"
