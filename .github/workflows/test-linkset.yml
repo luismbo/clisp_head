@@ -28,7 +28,12 @@ jobs:
       - name: build clisp with the fix
         run: |
           make lasthash
-          make docker
+          # skip `archive`: its `make distrib` needs nroff, absent from this image,
+          # and only produces the source tarball; pack the binary tarball as
+          # `archive` does.
+          make docker DOCKER_ACTION=compile
+          pack=`make -s show | sed -n 's/^PACK=\([^ ]*\).*/\1/p'`
+          tar cjf $pack-binary.tar.bz2 $pack
           ls -l *.bz2
       - name: test patched tarball
         run: sh ./tools-for-build/test-linkset `ls clisp-*-binary.tar.bz2`
