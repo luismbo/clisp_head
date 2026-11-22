@@ -36,6 +36,11 @@ jobs:
           tar cjf $pack-binary.tar.bz2 $pack
           ls -l *.bz2
       - name: test patched tarball
-        run: sh ./tools-for-build/test-linkset `ls clisp-*-binary.tar.bz2`
+        # Run in the build image: the host's newer gcc defaults to PIE, which
+        # this toolchain's non-PIE lisp.a can't link into (a separate issue).
+        run: |
+          docker run --rm --platform $DOCKER_PLATFORM -v `pwd`:/work -w /work \
+            $DOCKER_REPO/`cat tools-for-build/$IMAGE/Name` \
+            sh ./tools-for-build/test-linkset `ls clisp-*-binary.tar.bz2`
       - name: report control outcome
         run: echo "control outcome = ${{ steps.control.outcome }}"
